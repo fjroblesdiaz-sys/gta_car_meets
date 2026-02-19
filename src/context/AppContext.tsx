@@ -3,7 +3,9 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
 import { User, Car, Meet, ChatMessage } from "@/types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
+const USE_API = false; // Cambiar a true cuando desplegues la API
+
+const API_URL = "http://localhost:3001/api";
 
 interface AuthContextType {
   user: User | null;
@@ -24,37 +26,58 @@ interface AppContextType {
   joinMeet: (meetId: string, playerName: string) => Promise<void>;
   leaveMeet: (meetId: string, playerName: string) => Promise<void>;
   sendMessage: (text: string) => Promise<void>;
-  refreshData: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+const STORAGE_KEY = "gta-car-meets-data";
 const AUTH_KEY = "gta-car-meets-auth";
 
-export function AppProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [cars, setCars] = useState<Car[]>([]);
-  const [meets, setMeets] = useState<Meet[]>([]);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [loading, setLoading] = useState(true);
+const defaultData = {
+  users: [] as User[],
+  cars: [] as Car[],
+  meets: [] as Meet[],
+  messages: [] as ChatMessage[]
+};
 
-  const refreshData = useCallback(async () => {
-    try {
-      const [carsRes, meetsRes, msgsRes] = await Promise.all([
-        fetch(`${API_URL}/cars`),
-        fetch(`${API_URL}/meets`),
-        fetch(`${API_URL}/messages`)
-      ]);
-      setCars(await carsRes.json());
-      setMeets(await meetsRes.json());
-      setMessages(await msgsRes.json());
-    } catch (e) {
-      console.error("Error fetching data:", e);
+function loadData() {
+  if (typeof window === "undefined") return defaultData;
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return {
+        users: Array.isArray(parsed.users) ? parsed.users : [],
+        cars: Array.isArray(parsed.cars) ? parsed.cars : [],
+        meets: Array.isArray(parsed.meets) ? parsed.meets : [],
+        messages: Array.isArray(parsed.messages) ? parsed.messages : []
+      };
     }
-  }, []);
+  } catch (e) {
+    console.error("Error loading data:", e);
+  }
+  return defaultData;
+}
+
+function saveData(data: typeof defaultData) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch (e) {
+    console.error("Error saving data:", e);
+  }
+}
+
+export function AppProvider({ children }: { children: ReactNode }) {
+  const [data, setData] = useState(defaultData);
+  const [user, setUser] = useState<User | null>(null);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    const loadedData = loadData();
+    setData(loadedData);
+    
     const authUser = localStorage.getItem(AUTH_KEY);
     if (authUser) {
       try {
@@ -63,46 +86,75 @@ export function AppProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem(AUTH_KEY);
       }
     }
-    refreshData().then(() => setLoading(false));
-  }, [refreshData]);
+    setMounted(true);
+  }, []);
 
   const login = useCallback(async (email: string, password: string): Promise<boolean> => {
-    try {
-      const res = await fetch(`${API_URL}/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password })
-      });
-      if (res.ok) {
-        const userData = await res.json();
-        setUser(userData);
-        localStorage.setItem(AUTH_KEY, JSON.stringify(userData));
+    if (USE_API) {
+      try {
+        const res = await fetch(`${API_URL}/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password })
+        });
+        if (res.ok) {
+          const userData = await res.json();
+          setUser(userData);
+          localStorage.setItem(AUTH_KEY, JSON.stringify(userData));
+          return true;
+        }
+      } catch (e) {
+        console.error("Login error:", e);
+      }
+      return false;
+    } else {
+      const found = data.users.find(u => u.email === email && u.password === password);
+      if (found) {
+        setUser(found);
+        localStorage.setItem(AUTH_KEY, JSON.stringify(found));
         return true;
       }
-    } catch (e) {
-      console.error("Login error:", e);
+      return false;
     }
-    return false;
-  }, []);
+  }, [data.users]);
 
   const register = useCallback(async (username: string, email: string, password: string): Promise<boolean> => {
-    try {
-      const res = await fetch(`${API_URL}/users`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, email, password })
-      });
-      if (res.ok) {
-        const userData = await res.json();
-        setUser(userData);
-        localStorage.setItem(AUTH_KEY, JSON.stringify(userData));
-        return true;
+    if (USE_API) {
+      try {
+        const res = await fetch(`${API_URL}/users`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, email, password })
+        });
+        if (res.ok) {
+          const userData = await res.json();
+          setUser(userData);
+          localStorage.setItem(AUTH_KEY, JSON.stringify(userData));
+          return true;
+        }
+      } catch (e) {
+        console.error("Register error:", e);
       }
-    } catch (e) {
-      console.error("Register error:", e);
+      return false;
+    } else {
+      if (data.users.some(u => u.email === email)) {
+        return false;
+      }
+      const newUser: User = {
+        id: crypto.randomUUID(),
+        username,
+        email,
+        password,
+        createdAt: Date.now()
+      };
+      const newData = { ...data, users: [...data.users, newUser] };
+      setData(newData);
+      saveData(newData);
+      setUser(newUser);
+      localStorage.setItem(AUTH_KEY, JSON.stringify(newUser));
+      return true;
     }
-    return false;
-  }, []);
+  }, [data]);
 
   const logout = useCallback(() => {
     setUser(null);
@@ -111,106 +163,170 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addCar = useCallback(async (car: Omit<Car, "id" | "createdAt" | "userId">) => {
     if (!user) return;
-    try {
-      const res = await fetch(`${API_URL}/cars`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...car, userId: user.id })
-      });
-      if (res.ok) {
-        const newCar = await res.json();
-        setCars(prev => [...prev, newCar]);
-      }
-    } catch (e) {
-      console.error("Error adding car:", e);
+    const newCar: Car = {
+      ...car,
+      userId: user.id,
+      id: crypto.randomUUID(),
+      createdAt: Date.now()
+    };
+    if (USE_API) {
+      try {
+        const res = await fetch(`${API_URL}/cars`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...car, userId: user.id })
+        });
+        if (res.ok) {
+          const savedCar = await res.json();
+          setData(prev => ({ ...prev, cars: [...prev.cars, savedCar] }));
+        }
+      } catch (e) { console.error(e); }
+    } else {
+      const newData = { ...data, cars: [...data.cars, newCar] };
+      setData(newData);
+      saveData(newData);
     }
-  }, [user]);
+  }, [user, data]);
 
   const deleteCar = useCallback(async (id: string) => {
-    try {
-      await fetch(`${API_URL}/cars/${id}`, { method: "DELETE" });
-      setCars(prev => prev.filter(c => c.id !== id));
-    } catch (e) {
-      console.error("Error deleting car:", e);
+    if (USE_API) {
+      try {
+        await fetch(`${API_URL}/cars/${id}`, { method: "DELETE" });
+      } catch (e) { console.error(e); }
     }
-  }, []);
+    const newData = { ...data, cars: data.cars.filter(c => c.id !== id) };
+    setData(newData);
+    saveData(newData);
+  }, [data]);
 
   const addMeet = useCallback(async (meet: Omit<Meet, "id" | "createdAt" | "participants" | "userId">) => {
     if (!user) return;
-    try {
-      const res = await fetch(`${API_URL}/meets`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...meet, userId: user.id })
-      });
-      if (res.ok) {
-        const newMeet = await res.json();
-        setMeets(prev => [...prev, newMeet]);
-      }
-    } catch (e) {
-      console.error("Error adding meet:", e);
+    const newMeet: Meet = {
+      ...meet,
+      userId: user.id,
+      id: crypto.randomUUID(),
+      participants: [],
+      createdAt: Date.now()
+    };
+    if (USE_API) {
+      try {
+        const res = await fetch(`${API_URL}/meets`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...meet, userId: user.id })
+        });
+        if (res.ok) {
+          const savedMeet = await res.json();
+          setData(prev => ({ ...prev, meets: [...prev.meets, savedMeet] }));
+        }
+      } catch (e) { console.error(e); }
+    } else {
+      const newData = { ...data, meets: [...data.meets, newMeet] };
+      setData(newData);
+      saveData(newData);
     }
-  }, [user]);
+  }, [user, data]);
 
   const deleteMeet = useCallback(async (id: string) => {
-    try {
-      await fetch(`${API_URL}/meets/${id}`, { method: "DELETE" });
-      setMeets(prev => prev.filter(m => m.id !== id));
-    } catch (e) {
-      console.error("Error deleting meet:", e);
+    if (USE_API) {
+      try {
+        await fetch(`${API_URL}/meets/${id}`, { method: "DELETE" });
+      } catch (e) { console.error(e); }
     }
-  }, []);
+    const newData = { ...data, meets: data.meets.filter(m => m.id !== id) };
+    setData(newData);
+    saveData(newData);
+  }, [data]);
 
   const joinMeet = useCallback(async (meetId: string, playerName: string) => {
-    try {
-      const res = await fetch(`${API_URL}/meets/${meetId}/join`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ playerName })
-      });
-      if (res.ok) {
-        const updatedMeet = await res.json();
-        setMeets(prev => prev.map(m => m.id === meetId ? updatedMeet : m));
-      }
-    } catch (e) {
-      console.error("Error joining meet:", e);
+    if (USE_API) {
+      try {
+        const res = await fetch(`${API_URL}/meets/${meetId}/join`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ playerName })
+        });
+        if (res.ok) {
+          const updatedMeet = await res.json();
+          setData(prev => ({
+            ...prev,
+            meets: prev.meets.map(m => m.id === meetId ? updatedMeet : m)
+          }));
+        }
+      } catch (e) { console.error(e); }
+    } else {
+      const newData = {
+        ...data,
+        meets: data.meets.map(m => 
+          m.id === meetId && !m.participants.includes(playerName)
+            ? { ...m, participants: [...m.participants, playerName] }
+            : m
+        )
+      };
+      setData(newData);
+      saveData(newData);
     }
-  }, []);
+  }, [data]);
 
   const leaveMeet = useCallback(async (meetId: string, playerName: string) => {
-    try {
-      const res = await fetch(`${API_URL}/meets/${meetId}/leave`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ playerName })
-      });
-      if (res.ok) {
-        const updatedMeet = await res.json();
-        setMeets(prev => prev.map(m => m.id === meetId ? updatedMeet : m));
-      }
-    } catch (e) {
-      console.error("Error leaving meet:", e);
+    if (USE_API) {
+      try {
+        const res = await fetch(`${API_URL}/meets/${meetId}/leave`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ playerName })
+        });
+        if (res.ok) {
+          const updatedMeet = await res.json();
+          setData(prev => ({
+            ...prev,
+            meets: prev.meets.map(m => m.id === meetId ? updatedMeet : m)
+          }));
+        }
+      } catch (e) { console.error(e); }
+    } else {
+      const newData = {
+        ...data,
+        meets: data.meets.map(m =>
+          m.id === meetId
+            ? { ...m, participants: m.participants.filter(p => p !== playerName) }
+            : m
+        )
+      };
+      setData(newData);
+      saveData(newData);
     }
-  }, []);
+  }, [data]);
 
   const sendMessage = useCallback(async (text: string) => {
     if (!user || !text.trim()) return;
-    try {
-      const res = await fetch(`${API_URL}/messages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id, username: user.username, text: text.trim() })
-      });
-      if (res.ok) {
-        const newMessage = await res.json();
-        setMessages(prev => [...prev, newMessage]);
-      }
-    } catch (e) {
-      console.error("Error sending message:", e);
+    const newMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      userId: user.id,
+      username: user.username,
+      text: text.trim(),
+      createdAt: Date.now()
+    };
+    if (USE_API) {
+      try {
+        const res = await fetch(`${API_URL}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: user.id, username: user.username, text: text.trim() })
+        });
+        if (res.ok) {
+          const savedMsg = await res.json();
+          setData(prev => ({ ...prev, messages: [...prev.messages, savedMsg] }));
+        }
+      } catch (e) { console.error(e); }
+    } else {
+      const newData = { ...data, messages: [...data.messages, newMessage] };
+      setData(newData);
+      saveData(newData);
     }
-  }, [user]);
+  }, [user, data]);
 
-  if (loading) {
+  if (!mounted) {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
         <div className="text-yellow-500 text-xl">Cargando...</div>
@@ -222,18 +338,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{ user, login, register, logout }}>
       <AppContext.Provider
         value={{
-          cars,
-          meets,
-          messages,
-          loading,
+          cars: data.cars,
+          meets: data.meets,
+          messages: data.messages,
+          loading: false,
           addCar,
           deleteCar,
           addMeet,
           deleteMeet,
           joinMeet,
           leaveMeet,
-          sendMessage,
-          refreshData
+          sendMessage
         }}
       >
         {children}
