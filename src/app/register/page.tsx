@@ -38,15 +38,11 @@ export default function Register() {
       return;
     }
     
-    try {
-      const success = register(username.trim(), email.trim(), password);
-      if (!success) {
-        setError("El email ya está registrado");
-      } else {
-        router.push("/");
-      }
-    } catch (err) {
-      setError("Error al registrar. Intenta de nuevo.");
+    const success = await register(username.trim(), email.trim(), password);
+    if (!success) {
+      setError("El email ya está registrado");
+    } else {
+      router.push("/");
     }
     setLoading(false);
   };

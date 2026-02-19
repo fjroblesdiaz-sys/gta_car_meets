@@ -1,23 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { useApp } from "@/context/AppContext";
+import { useApp, useAuth } from "@/context/AppContext";
 import { useState } from "react";
-import { Plus, MapPin, Calendar, Clock, Trash2, UserPlus, UserMinus, X } from "lucide-react";
+import { Plus, MapPin, Calendar, Clock, Trash2, UserPlus, Users } from "lucide-react";
 
 export default function Meets() {
+  const { user } = useAuth();
   const { meets, joinMeet, deleteMeet } = useApp();
-  const [playerName, setPlayerName] = useState<{ [key: string]: string }>({});
+  const [joinName, setJoinName] = useState("");
 
   const sortedMeets = [...meets].sort(
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
   );
 
   const handleJoin = (meetId: string) => {
-    const name = playerName[meetId]?.trim();
+    const name = joinName.trim();
     if (name) {
       joinMeet(meetId, name);
-      setPlayerName(prev => ({ ...prev, [meetId]: "" }));
+      setJoinName("");
     }
   };
 
@@ -108,8 +109,8 @@ export default function Meets() {
                     <div className="flex items-center gap-2">
                       <input
                         type="text"
-                        value={playerName[meet.id] || ""}
-                        onChange={(e) => setPlayerName(prev => ({ ...prev, [meet.id]: e.target.value }))}
+                        value={joinName}
+                        onChange={(e) => setJoinName(e.target.value)}
                         placeholder="Tu PSN..."
                         className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm w-28 focus:border-yellow-500 focus:outline-none"
                         onKeyPress={(e) => e.key === "Enter" && handleJoin(meet.id)}

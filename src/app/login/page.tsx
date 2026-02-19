@@ -20,7 +20,7 @@ export default function Login() {
     }
   }, [user, router]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
@@ -31,15 +31,13 @@ export default function Login() {
       return;
     }
     
-    setTimeout(() => {
-      const success = login(email.trim(), password);
-      if (!success) {
-        setError("Email o contraseña incorrectos. ¿Te has registrado antes?");
-      } else {
-        router.push("/");
-      }
-      setLoading(false);
-    }, 100);
+    const success = await login(email.trim(), password);
+    if (!success) {
+      setError("Email o contraseña incorrectos");
+    } else {
+      router.push("/");
+    }
+    setLoading(false);
   };
 
   return (
