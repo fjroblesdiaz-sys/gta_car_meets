@@ -3,16 +3,23 @@
 import Link from "next/link";
 import { useApp, useAuth } from "@/context/AppContext";
 import { useState } from "react";
-import { Plus, MapPin, Calendar, Clock, Trash2, UserPlus, Users } from "lucide-react";
+import { Plus, MapPin, Calendar, Clock, Trash2, UserPlus, Users, X, Check, LogIn } from "lucide-react";
 
 export default function Meets() {
   const { user } = useAuth();
-  const { meets, joinMeet, deleteMeet } = useApp();
+  const { meets, users, joinMeet, deleteMeet, addUserToMeet, removeUserFromMeet } = useApp();
   const [joinName, setJoinName] = useState("");
+  const [showUserModal, setShowUserModal] = useState<string | null>(null);
 
   const sortedMeets = [...meets].sort(
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
   );
+
+  const handleJoinWithAccount = (meetId: string) => {
+    if (user) {
+      joinMeet(meetId, user.username);
+    }
+  };
 
   const handleJoin = (meetId: string) => {
     const name = joinName.trim();
@@ -20,6 +27,22 @@ export default function Meets() {
       joinMeet(meetId, name);
       setJoinName("");
     }
+  };
+
+  const isUserInMeet = (meet: typeof meets[0], checkUserId?: string) => {
+    const idToCheck = checkUserId || user?.id;
+    if (!idToCheck) return false;
+    return meet.participants.some(p => typeof p === 'object' ? p.id === idToCheck : p === idToCheck);
+  };
+
+  const getParticipantName = (p: string | { id: string; username: string }) => {
+    return typeof p === 'object' ? p.username : p;
+  };
+
+  const availableUsers = (meetId: string) => {
+    const meet = meets.find(m => m.id === meetId);
+    if (!meet) return [];
+    return users.filter(u => !isUserInMeet(meet, u.id));
   };
 
   return (
@@ -107,20 +130,48 @@ export default function Meets() {
                     </div>
                     
                     <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={joinName}
-                        onChange={(e) => setJoinName(e.target.value)}
-                        placeholder="Tu PSN..."
-                        className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm w-28 focus:border-yellow-500 focus:outline-none"
-                        onKeyPress={(e) => e.key === "Enter" && handleJoin(meet.id)}
-                      />
-                      <button
-                        onClick={() => handleJoin(meet.id)}
-                        className="p-1.5 rounded-lg bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500/30 transition-colors"
-                      >
-                        <UserPlus size={16} />
-                      </button>
+                      {user && (
+                        isUserInMeet(meet) ? (
+                          <span className="text-green-500 text-xs font-medium px-2 py-1 bg-green-500/10 rounded-lg">
+                            ✓ Inscrito
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleJoinWithAccount(meet.id)}
+                            className="px-3 py-1.5 rounded-lg bg-green-500/20 text-green-500 hover:bg-green-500/30 transition-colors text-sm font-medium flex items-center gap-1"
+                          >
+                            <LogIn size={14} />
+                            Unirse
+                          </button>
+                        )
+                      )}
+                      {user && (
+                        <button
+                          onClick={() => setShowUserModal(meet.id)}
+                          className="p-1.5 rounded-lg bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500/30 transition-colors"
+                          title="Agregar usuario registrado"
+                        >
+                          <Users size={16} />
+                        </button>
+                      )}
+                      {!user && (
+                        <>
+                          <input
+                            type="text"
+                            value={joinName}
+                            onChange={(e) => setJoinName(e.target.value)}
+                            placeholder="Tu PSN..."
+                            className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm w-28 focus:border-yellow-500 focus:outline-none"
+                            onKeyPress={(e) => e.key === "Enter" && handleJoin(meet.id)}
+                          />
+                          <button
+                            onClick={() => handleJoin(meet.id)}
+                            className="p-1.5 rounded-lg bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500/30 transition-colors"
+                          >
+                            <UserPlus size={16} />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                   
@@ -131,10 +182,18 @@ export default function Meets() {
                         {meet.participants.map((p, i) => (
                           <span 
                             key={i} 
-                            className="px-3 py-1 rounded-full text-xs font-medium"
+                            className="px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1"
                             style={{ background: 'rgba(234,179,8,0.1)', color: '#fbbf24' }}
                           >
-                            {p}
+                            {getParticipantName(p)}
+                            {typeof p === 'object' && user && p.id !== meet.userId && (
+                              <button
+                                onClick={() => removeUserFromMeet(meet.id, p.id)}
+                                className="ml-1 hover:text-red-400"
+                              >
+                                <X size={12} />
+                              </button>
+                            )}
                           </span>
                         ))}
                       </div>
@@ -146,6 +205,47 @@ export default function Meets() {
           </div>
         )}
       </div>
+
+      {showUserModal && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.9)' }}
+        >
+          <div 
+            className="rounded-2xl p-5 max-w-md w-full max-h-[80vh] overflow-y-auto"
+            style={{ background: 'linear-gradient(145deg, #1f1f1f 0%, #141414 100%)', border: '1px solid #333' }}
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-bold text-xl text-white">Agregar usuario</h3>
+              <button onClick={() => setShowUserModal(null)} className="text-gray-400 hover:text-white">
+                <X size={24} />
+              </button>
+            </div>
+            {availableUsers(showUserModal).length === 0 ? (
+              <p className="text-gray-400 text-center py-4">No hay usuarios disponibles para agregar</p>
+            ) : (
+              <div className="space-y-2">
+                {availableUsers(showUserModal).map(u => (
+                  <div 
+                    key={u.id}
+                    className="flex items-center justify-between p-3 rounded-lg bg-gray-800"
+                  >
+                    <span className="text-white">{u.username}</span>
+                    <button
+                      onClick={() => {
+                        addUserToMeet(showUserModal, u.id);
+                      }}
+                      className="p-2 rounded-lg bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500/30"
+                    >
+                      <Check size={18} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

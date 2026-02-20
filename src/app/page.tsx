@@ -2,15 +2,21 @@
 
 import Link from "next/link";
 import { useApp, useAuth } from "@/context/AppContext";
-import { Plus, ArrowRight, MapPin, Calendar, Users, Car, LogIn, UserPlus } from "lucide-react";
+import { Plus, ArrowRight, MapPin, Calendar, Users, Car, LogIn, UserPlus, Clock } from "lucide-react";
 
 export default function Home() {
   const { cars, meets } = useApp();
   const { user } = useAuth();
 
-  const nextMeet = meets
+  const nextMeets = meets
     .filter(m => new Date(m.date) >= new Date())
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0];
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    .slice(0, 3);
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+  };
 
   return (
     <div className="min-h-screen" style={{ 
@@ -99,7 +105,7 @@ export default function Home() {
                   <div className="w-12 h-12 rounded-xl bg-yellow-500/20 flex items-center justify-center mb-3 group-hover:bg-yellow-500/30 transition-colors">
                     <Users size={24} className="text-yellow-500" />
                   </div>
-                  <span className="text-gray-400 text-xs tracking-wider">TUS</span>
+                  <span className="text-gray-400 text-xs tracking-wider">TOTAL</span>
                   <div className="text-3xl font-bold text-white">{meets.length}</div>
                   <span className="text-yellow-500 text-sm font-medium">QUEDADAS</span>
                 </div>
@@ -141,34 +147,57 @@ export default function Home() {
               </Link>
             </div>
 
-            {nextMeet && (
-              <div className="rounded-2xl overflow-hidden" style={{ background: 'linear-gradient(145deg, #1f1f1f 0%, #141414 100%)', border: '1px solid #333' }}>
-                <div className="h-1 bg-gradient-to-r from-yellow-600 via-yellow-500 to-yellow-600" />
-                <div className="p-5">
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="px-2 py-1 bg-yellow-500/20 text-yellow-500 text-xs font-bold rounded">PRÓXIMA</span>
-                    <span className="text-gray-500 text-xs">QUEDADA</span>
+            <div className="rounded-2xl overflow-hidden mb-6" style={{ background: 'linear-gradient(145deg, #1f1f1f 0%, #141414 100%)', border: '1px solid #333' }}>
+              <div className="h-1 bg-gradient-to-r from-green-600 via-green-500 to-green-600" />
+              <div className="p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl">🌍</span>
+                    <h2 className="text-lg font-bold text-white">QUEDADAS ACTIVAS</h2>
                   </div>
-                  <h2 className="text-xl font-bold text-white mb-3">{nextMeet.title}</h2>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-gray-400">
-                      <MapPin size={14} className="text-yellow-500" />
-                      <span className="text-sm">{nextMeet.location}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-gray-400">
-                      <Calendar size={14} className="text-yellow-500" />
-                      <span className="text-sm">{nextMeet.date} • {nextMeet.time}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-gray-400">
-                      <Users size={14} className="text-yellow-500" />
-                      <span className="text-sm">{nextMeet.participants.length} participantes</span>
-                    </div>
-                  </div>
+                  <Link href="/meets" className="text-yellow-500 text-sm hover:underline">Ver todas</Link>
                 </div>
+                
+                {nextMeets.length > 0 ? (
+                  <div className="space-y-3">
+                    {nextMeets.map((meet) => (
+                      <div 
+                        key={meet.id}
+                        className="p-3 rounded-xl bg-gray-800/50 border border-gray-700"
+                      >
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h3 className="font-bold text-white text-sm">{meet.title}</h3>
+                            <div className="flex items-center gap-3 mt-1">
+                              <div className="flex items-center gap-1 text-gray-400">
+                                <MapPin size={12} className="text-yellow-500" />
+                                <span className="text-xs">{meet.location}</span>
+                              </div>
+                              <div className="flex items-center gap-1 text-gray-400">
+                                <Calendar size={12} className="text-yellow-500" />
+                                <span className="text-xs">{formatDate(meet.date)}</span>
+                              </div>
+                              <div className="flex items-center gap-1 text-gray-400">
+                                <Clock size={12} className="text-yellow-500" />
+                                <span className="text-xs">{meet.time}</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 text-yellow-500">
+                            <Users size={14} />
+                            <span className="text-xs font-bold">{meet.participants.length}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-500 text-center py-4 text-sm">No hay quedadas programadas</p>
+                )}
               </div>
-            )}
+            </div>
 
-            {!nextMeet && meets.length > 0 && (
+            {nextMeets.length === 0 && (
               <div className="rounded-2xl p-5 text-center" style={{ background: 'linear-gradient(145deg, #1f1f1f 0%, #141414 100%)', border: '1px solid #333' }}>
                 <p className="text-gray-400">No hay quedadas próximas</p>
               </div>

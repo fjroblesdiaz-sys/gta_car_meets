@@ -24,7 +24,7 @@ export interface Meet {
   location: string;
   date: string;
   time: string;
-  participants: string[];
+  participants: (string | { id: string; username: string })[];
   createdAt: number;
 }
 
@@ -33,6 +33,15 @@ export interface ChatMessage {
   userId: string;
   username: string;
   text: string;
+  roomId?: string;
+  createdAt: number;
+}
+
+export interface ChatRoom {
+  id: string;
+  name: string;
+  createdBy: string;
+  isGlobal: boolean;
   createdAt: number;
 }
 
@@ -41,4 +50,5 @@ export interface AppData {
   cars: Car[];
   meets: Meet[];
   messages: ChatMessage[];
+  chatRooms: ChatRoom[];
 }

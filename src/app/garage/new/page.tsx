@@ -1,18 +1,56 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/context/AppContext";
-import { Plus, X, Save, ArrowLeft, Car } from "lucide-react";
+import { Plus, X, Save, ArrowLeft, Car, Upload, Image } from "lucide-react";
 
 export default function NewCar() {
   const router = useRouter();
   const { addCar } = useApp();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState("");
   const [model, setModel] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [mods, setMods] = useState<string[]>([]);
   const [newMod, setNewMod] = useState("");
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        alert('Por favor, selecciona un archivo de imagen');
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        alert('La imagen no puede superar 5MB');
+        return;
+      }
+      setUploading(true);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target?.result as string;
+        setImagePreview(result);
+        setImageUrl(result);
+        setUploading(false);
+      };
+      reader.onerror = () => {
+        setUploading(false);
+        alert('Error al procesar la imagen');
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeImage = () => {
+    setImageUrl("");
+    setImagePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,15 +121,55 @@ export default function NewCar() {
           </div>
 
           <div>
-            <label className="block text-sm text-gray-400 mb-2">
-              URL de imagen (opcional)
+            <label className="block text-sm text-gray-400 mb-2 flex items-center gap-2">
+              <span className="w-1 h-1 bg-yellow-500 rounded-full" />
+              Foto del coche
             </label>
             <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/*"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+            {imagePreview ? (
+              <div className="relative rounded-xl overflow-hidden border border-gray-700">
+                <img src={imagePreview} alt="Preview" className="w-full h-48 object-cover" />
+                <button
+                  type="button"
+                  onClick={removeImage}
+                  className="absolute top-2 right-2 p-2 rounded-full bg-red-500/80 text-white hover:bg-red-500 transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="w-full h-32 rounded-xl border-2 border-dashed border-gray-700 hover:border-yellow-500 transition-colors flex flex-col items-center justify-center gap-2 text-gray-400 hover:text-yellow-500"
+              >
+                {uploading ? (
+                  <div className="w-6 h-6 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <Upload size={24} />
+                    <span className="text-sm">Subir foto</span>
+                  </>
+                )}
+              </button>
+            )}
+            <p className="text-xs text-gray-500 mt-2">O introduce una URL:</p>
+            <input
               type="url"
-              value={imageUrl}
-              onChange={(e) => setImageUrl(e.target.value)}
+              value={imageUrl && imagePreview !== imageUrl ? imageUrl : ""}
+              onChange={(e) => {
+                setImageUrl(e.target.value);
+                setImagePreview(null);
+              }}
               placeholder="https://..."
-              className="w-full bg-gray-900/80 border border-gray-700 rounded-xl p-4 focus:border-yellow-500 focus:outline-none text-white placeholder-gray-600 transition-colors"
+              className="w-full bg-gray-900/80 border border-gray-700 rounded-xl p-4 focus:border-yellow-500 focus:outline-none text-white placeholder-gray-600 mt-2"
             />
           </div>
 
